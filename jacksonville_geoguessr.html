@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jacksonville GeoGuessr</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow: hidden;
+        }
+
+        .game-container {
+            display: flex;
+            height: 100vh;
+            position: relative;
+        }
+
+        .street-view {
+            flex: 1;
+            position: relative;
+        }
+
+        #streetView {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-left: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .score-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .score {
+            font-size: 18px;
+            font-weight: bold;
+            color: #4ecdc4;
+        }
+
+        .round {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .mini-map {
+            height: 200px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 10px;
+        }
+
+        .guess-button {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .guess-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3);
+        }
+
+        .guess-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .new-round-button {
+            background: linear-gradient(45deg, #4ecdc4, #44a08d);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .new-round-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(78, 205, 196, 0.3);
+        }
+
+        .result {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .distance {
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff6b6b;
+        }
+
+        .points {
+            font-size: 16px;
+            color: #4ecdc4;
+            margin-top: 5px;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #4ecdc4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+        }
+
+        .controls button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 12px;
+            margin: 2px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .controls button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .guess-marker {
+            position: relative;
+        }
+
+        .guess-marker::after {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 15px solid #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="street-view">
+            <div id="streetView"></div>
+            <div id="loading" class="loading">
+                <div class="loading-spinner"></div>
+                <div>Loading Jacksonville location...</div>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="header">
+                <h1>Jacksonville GeoGuessr</h1>
+                <div class="tagline">Explore the Bold New City of the South</div>
+            </div>
+            
+            <div class="score-info">
+                <div class="score">Score: <span id="totalScore">0</span></div>
+                <div class="round">Round: <span id="currentRound">1</span>/5</div>
+            </div>
+            
+            <div id="miniMap" class="mini-map"></div>
+            
+            <button id="guessButton" class="guess-button" disabled>Make Your Guess</button>
+            <button id="newRoundButton" class="new-round-button" style="display: none;">Next Round</button>
+            
+            <div id="result" class="result" style="display: none;">
+                <div class="distance">Distance: <span id="distanceText">0</span> km</div>
+                <div class="points">Points: <span id="pointsText">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map, streetView, panorama;
+        let currentLocation;
+        let guessLocation;
+        let totalScore = 0;
+        let currentRound = 1;
+        let hasGuessed = false;
+        let guessMarker;
+
+        // Jacksonville area bounds
+        const JACKSONVILLE_BOUNDS = {
+            north: 30.5,
+            south: 30.1,
+            east: -81.4,
+            west: -81.8
+        };
+
+        // Popular Jacksonville locations for better gameplay
+        const JACKSONVILLE_LOCATIONS = [
+            {lat: 30.3322, lng: -81.6557}, // Downtown Jacksonville
+            {lat: 30.3072, lng: -81.3937}, // Jacksonville Beach
+            {lat: 30.2672, lng: -81.5507}, // Southside
+            {lat: 30.3697, lng: -81.6614}, // Riverside
+            {lat: 30.4518, lng: -81.6557}, // Northside
+            {lat: 30.2240, lng: -81.5440}, // San Marco
+            {lat: 30.1886, lng: -81.6756}, // Orange Park area
+            {lat: 30.4383, lng: -81.4628}, // Mayport
+            {lat: 30.3078, lng: -81.4944}, // Mandarin
+            {lat: 30.5266, lng: -81.6856}, // Fernandina Beach area
+        ];
+
+        function initGame() {
+            initializeMap();
+            loadNewLocation();
+        }
+
+        function initializeMap() {
+            // Initialize mini-map
+            map = new google.maps.Map(document.getElementById('miniMap'), {
+                zoom: 11,
+                center: {lat: 30.3322, lng: -81.6557}, // Jacksonville center
+                mapTypeId: 'roadmap',
+                streetViewControl: false,
+                mapTypeControl: false,
+                fullscreenControl: false
+            });
+
+            // Add click listener for guessing
+            map.addListener('click', function(event) {
+                if (!hasGuessed) {
+                    makeGuess(event.latLng);
+                }
+            });
+
+            // Initialize Street View with error handling
+            try {
+                const streetViewElement = document.getElementById('streetView');
+                
+                panorama = new google.maps.StreetViewPanorama(
+                    streetViewElement,
+                    {
+                        position: {lat: 30.3322, lng: -81.6557},
+                        pov: {heading: 34, pitch: 10},
+                        addressControl: false,
+                        linksControl: true,
+                        panControl: true,
+                        enableCloseButton: false,
+                        showRoadLabels: false,
+                        visible: true
+                    }
+                );
+
+                // Force a resize to ensure proper rendering
+                google.maps.event.addDomListener(window, 'resize', function() {
+                    google.maps.event.trigger(panorama, 'resize');
+                });
+
+                // Trigger initial resize
+                setTimeout(function() {
+                    google.maps.event.trigger(panorama, 'resize');
+                }, 100);
+
+                // Add error listener for Street View
+                panorama.addListener('status_changed', function() {
+                    const status = panorama.getStatus();
+                    console.log('Street View status:', status);
+                    if (status !== google.maps.StreetViewStatus.OK) {
+                        console.error('Street View failed with status:', status);
+                        showStreetViewError();
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error initializing Street View:', error);
+                showStreetViewError();
+            }
+        }
+
+        function showStreetViewError() {
+            const streetViewDiv = document.getElementById('streetView');
+            streetViewDiv.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #333; color: white; text-align: center; padding: 20px;">
+                    <div>
+                        <h3>Street View Not Available</h3>
+                        <p>There may be an issue with the Google Maps API key or Street View access.</p>
+                        <p>Please check the browser console for more details.</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getRandomJacksonvilleLocation() {
+            // Mix of predefined locations and random locations within bounds
+            if (Math.random() < 0.7) {
+                // 70% chance to use a predefined location
+                return JACKSONVILLE_LOCATIONS[Math.floor(Math.random() * JACKSONVILLE_LOCATIONS.length)];
+            } else {
+                // 30% chance to use a random location within Jacksonville bounds
+                return {
+                    lat: JACKSONVILLE_BOUNDS.south + (JACKSONVILLE_BOUNDS.north - JACKSONVILLE_BOUNDS.south) * Math.random(),
+                    lng: JACKSONVILLE_BOUNDS.west + (JACKSONVILLE_BOUNDS.east - JACKSONVILLE_BOUNDS.west) * Math.random()
+                };
+            }
+        }
+
+        function loadNewLocation() {
+            document.getElementById('loading').style.display = 'block';
+            hasGuessed = false;
+            
+            // Clear previous guess marker
+            if (guessMarker) {
+                guessMarker.setMap(null);
+            }
+
+            const streetViewService = new google.maps.StreetViewService();
+            let attempts = 0;
+            const maxAttempts = 10;
+            
+            function tryLocation() {
+                attempts++;
+                currentLocation = getRandomJacksonvilleLocation();
+                console.log(`Attempting location ${attempts}:`, currentLocation);
+                
+                streetViewService.getPanorama({
+                    location: currentLocation,
+                    radius: 1000,
+                    preference: google.maps.StreetViewPreference.NEAREST
+                }, function(data, status) {
+                    console.log('Street View Service status:', status);
+                    
+                    if (status === 'OK' && data && data.location) {
+                        currentLocation = data.location.latLng;
+                        console.log('Found panorama:', data.location.pano);
+                        
+                        try {
+                            panorama.setPano(data.location.pano);
+                            panorama.setPov({
+                                heading: Math.random() * 360,
+                                pitch: 0
+                            });
+                            document.getElementById('loading').style.display = 'none';
+                            document.getElementById('guessButton').disabled = false;
+                        } catch (error) {
+                            console.error('Error setting panorama:', error);
+                            if (attempts < maxAttempts) {
+                                tryLocation();
+                            } else {
+                                showLocationError();
+                            }
+                        }
+                    } else {
+                        console.log('No street view found, trying another location...');
+                        if (attempts < maxAttempts) {
+                            tryLocation();
+                        } else {
+                            showLocationError();
+                        }
+                    }
+                });
+            }
+            
+            tryLocation();
+        }
+
+        function showLocationError() {
+            document.getElementById('loading').style.display = 'none';
+            const streetViewDiv = document.getElementById('streetView');
+            streetViewDiv.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; background: #333; color: white; text-align: center; padding: 20px;">
+                    <div>
+                        <h3>Unable to Load Street View</h3>
+                        <p>Could not find a suitable Street View location in Jacksonville.</p>
+                        <button onclick="loadNewLocation()" style="margin-top: 10px; padding: 10px 20px; background: #4ecdc4; color: white; border: none; border-radius: 5px; cursor: pointer;">Try Again</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function makeGuess(latLng) {
+            if (hasGuessed) return;
+            
+            guessLocation = latLng;
+            
+            // Remove existing guess marker
+            if (guessMarker) {
+                guessMarker.setMap(null);
+            }
+            
+            // Add guess marker
+            guessMarker = new google.maps.Marker({
+                position: latLng,
+                map: map,
+                title: 'Your Guess',
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M15 0C6.716 0 0 6.716 0 15c0 15 15 25 15 25s15-10 15-25C30 6.716 23.284 0 15 0z" fill="#ff6b6b"/>
+                            <circle cx="15" cy="15" r="8" fill="white"/>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(30, 40),
+                    anchor: new google.maps.Point(15, 40)
+                }
+            });
+            
+            document.getElementById('guessButton').disabled = false;
+        }
+
+        function calculateScore() {
+            const distance = google.maps.geometry.spherical.computeDistanceBetween(
+                currentLocation, guessLocation
+            ) / 1000; // Convert to kilometers
+            
+            // Score calculation: max 5000 points, decreasing with distance
+            let points = Math.max(0, Math.round(5000 * Math.exp(-distance / 10)));
+            
+            return { distance: distance.toFixed(2), points: points };
+        }
+
+        function showResult() {
+            hasGuessed = true;
+            const result = calculateScore();
+            totalScore += result.points;
+            
+            // Show actual location marker
+            const actualMarker = new google.maps.Marker({
+                position: currentLocation,
+                map: map,
+                title: 'Actual Location',
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M15 0C6.716 0 0 6.716 0 15c0 15 15 25 15 25s15-10 15-25C30 6.716 23.284 0 15 0z" fill="#4ecdc4"/>
+                            <circle cx="15" cy="15" r="8" fill="white"/>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(30, 40),
+                    anchor: new google.maps.Point(15, 40)
+                }
+            });
+            
+            // Draw line between guess and actual location
+            const line = new google.maps.Polyline({
+                path: [guessLocation, currentLocation],
+                geodesic: true,
+                strokeColor: '#ff6b6b',
+                strokeOpacity: 1.0,
+                strokeWeight: 3,
+                map: map
+            });
+            
+            // Adjust map view to show both markers
+            const bounds = new google.maps.LatLngBounds();
+            bounds.extend(guessLocation);
+            bounds.extend(currentLocation);
+            map.fitBounds(bounds);
+            
+            // Update UI
+            document.getElementById('distanceText').textContent = result.distance;
+            document.getElementById('pointsText').textContent = result.points;
+            document.getElementById('totalScore').textContent = totalScore;
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('guessButton').style.display = 'none';
+            
+            if (currentRound < 5) {
+                document.getElementById('newRoundButton').style.display = 'block';
+            } else {
+                document.getElementById('newRoundButton').textContent = 'Game Complete! Play Again?';
+                document.getElementById('newRoundButton').style.display = 'block';
+            }
+        }
+
+        function nextRound() {
+            if (currentRound >= 5) {
+                // Reset game
+                currentRound = 1;
+                totalScore = 0;
+                document.getElementById('totalScore').textContent = '0';
+                document.getElementById('newRoundButton').textContent = 'Next Round';
+            } else {
+                currentRound++;
+            }
+            
+            document.getElementById('currentRound').textContent = currentRound;
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('guessButton').style.display = 'block';
+            document.getElementById('newRoundButton').style.display = 'none';
+            
+            // Clear map
+            map.setZoom(11);
+            map.setCenter({lat: 30.3322, lng: -81.6557});
+            
+            // Clear markers and lines
+            map = new google.maps.Map(document.getElementById('miniMap'), {
+                zoom: 11,
+                center: {lat: 30.3322, lng: -81.6557},
+                mapTypeId: 'roadmap',
+                streetViewControl: false,
+                mapTypeControl: false,
+                fullscreenControl: false
+            });
+            
+            map.addListener('click', function(event) {
+                if (!hasGuessed) {
+                    makeGuess(event.latLng);
+                }
+            });
+            
+            loadNewLocation();
+        }
+
+        // Event listeners
+        document.getElementById('guessButton').addEventListener('click', showResult);
+        document.getElementById('newRoundButton').addEventListener('click', nextRound);
+
+        // Initialize the game when Google Maps is loaded
+        function initMapsCallback() {
+            initGame();
+        }
+    </script>
+    
+    <script async defer 
+        src="https://maps.googleapis.com/maps/api/js?key={YOUR KEY HERE}&libraries=geometry&callback=initMapsCallback">
+    </script>
+</body>
+</html>
